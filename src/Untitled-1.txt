@@ -1,0 +1,61 @@
+根据这部分数据表,设计一张Z890主板。输出格式如下:
+
+内存:<1/2>DPC
+供电芯片：<PWM芯片名> m*<MOS芯片名>+n*<MOS芯片名>+o*<MOS芯片名>
+后置IO布置: 
+    USB:
+        USB2.0: <USB2.0数量>个
+            USB2.0 1 <对应Port> <接口形式>
+            USB2.0 2 <对应Port> <接口形式>
+            ...
+        USB3.2 Gen1x1: <数量>个
+            USB3.2 Gen1x1 1 <对应Port> <接口形式>
+            USB3.2 Gen1x1 2 <对应Port> <接口形式>
+            ...
+        USB3.2 Gen2x1: <数量>个
+            USB3.2 Gen2x1 1 <对应Port> <接口形式>
+            USB3.2 Gen2x1 2 <对应Port> <接口形式>
+            ...
+    视频输出:
+        HDMI: <数量>个
+            HDMI 1 <对应Port> <接口形式>
+            HDMI 2 <对应Port> <接口形式>
+            ...
+        DP: <数量>个
+            DP 1 <对应Port> <接口形式>
+            DP 2 <对应Port> <接口形式>
+            ...
+    网络:
+        有线网卡: <数量>个
+            有线网卡 1 <对应 PCIE Port> <芯片名> <接口形式>
+            有线网卡 2 <对应 PCIE Port> <芯片名> <接口形式>
+            ...
+    其他:
+        ...
+    
+前置IO布置：
+    USB:
+    USB2.0: <USB2.0数量>个
+        USB2.0 1 <对应Port> <接口形式>
+        USB2.0 2 <对应Port> <接口形式>
+        ...
+    USB3.2 Gen1x1: <数量>个
+        USB3.2 Gen1x1 1 <对应Port> <接口形式>
+        USB3.2 Gen1x1 2 <对应Port> <接口形式>
+        ...
+    USB3.2 Gen2x1: <数量>个
+        USB3.2 Gen2x1 1 <对应Port> <接口形式>
+        USB3.2 Gen2x1 2 <对应Port> <接口形式>
+        ...
+    ...
+
+
+内置拓展：
+    M2:
+        M2 1 <SLOT位置> <对应Port> <PCIE速率>*<PCIE width>
+        M2 2 <SLOT位置> <对应Port> <PCIE速率>*<PCIE width>
+        ...
+    PCIE:
+        PCIE 1 <SLOT位置> <对应Port> <PCIE速率>*<PCIE width>
+        PCIE 2 <SLOT位置> <对应Port> <PCIE速率>*<PCIE width>
+        ...
