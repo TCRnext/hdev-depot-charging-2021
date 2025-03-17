@@ -1,6 +1,5 @@
 import math
 import random
-from networkx import clustering
 import numpy as np
 
 
