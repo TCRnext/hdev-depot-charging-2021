@@ -1,5 +1,6 @@
 import math
 import random
+from networkx import clustering
 import numpy as np
 
 
@@ -429,8 +430,6 @@ class Taxi_generator(General_delivery_generator):
             output[i]["distance"] = output[i]["distance"]*(1+self.distance_extra_weight)
         return output
         
-        
-class Goods_delivery_generator(P2P_delivery_generator):
     def __init__(
         self ,
         range_radius = 5 ,                                     ## 配送场景中的配送半径，eg:5km
@@ -438,12 +437,50 @@ class Goods_delivery_generator(P2P_delivery_generator):
         is_busy_time = False ,                                 ## 是否设置繁忙时间段
         per_RX_base_generate = 2 ,                             ## 每分钟生成的接收点数量
         cluster_extra_distance = 0.5 ,                         ## 配送场景中的集群额外距离
+        cluster_num_avg = 5 ,                                  ## 配送场景中的集群数量平均值
+        cluster_num_std = 2 ,                                  ## 配送场景中的集群数量标准差
     ):
         super().__init__(False,False,range_radius,num_rx,is_busy_time,per_RX_base_generate,[],0,[])
         self.cluster_extra_distance = cluster_extra_distance
-        
+        self.cluster_num_avg = cluster_num_avg
+        self.cluster_num_std = cluster_num_std
     
+    def generate_busy_time(self,time):
+        output = []
+        index = 0
+        for i in range(len(self.busy_time)):
+            if time >= self.busy_time[i]-self.busy_time_length/2 and time <= self.busy_time[i] + self.busy_time_length/2:
+                index = i
+                break
+        generate_num = random.gauss(1,0.33)*self.per_RX_base_generate + self.busy_time_weight[index]
+        if generate_num < 0:
+            generate_num = 0
+        generate_num = int(generate_num)
+        for i in range(generate_num):
+            rx = self.rx_list[random.randint(0,len(self.rx_list)-1)]
+            distance = math.sqrt(rx[0]**2+rx[1]**2)
+            cluster_num = int(random.gauss(self.cluster_num_avg,self.cluster_num_std))
+            if cluster_num < 1:
+                cluster_num = 1
+            distance += cluster_num * self.cluster_extra_distance
+            output_piece = {"rx":rx,"time":time,"distance":distance,"index of this minute":index}
+            output.append(output_piece)
+        return output
     
+    def generate_non_busy_time(self,time):
+        output = []
+        generate_num = random.gauss(1,0.33)*self.per_RX_base_generate
+        generate_num = int(generate_num)
+        for i in range(generate_num):
+            rx = self.rx_list[random.randint(0,len(self.rx_list)-1)]
+            distance = math.sqrt(rx[0]**2+rx[1]**2)
+            cluster_num = int(random.gauss(self.cluster_num_avg,self.cluster_num_std))
+            if cluster_num < 1:
+                cluster_num = 1
+            distance += cluster_num * self.cluster_extra_distance
+            output_piece = {"rx":rx,"time":time,"distance":distance}
+            output.append(output_piece)   
+        return output     
     
 class Food_delivery_generator(General_delivery_generator):
     def __init__(
