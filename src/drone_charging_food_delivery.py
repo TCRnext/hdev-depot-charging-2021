@@ -15,9 +15,9 @@ def scene_food_delivery_analysis(
 ):
     drone_list = []
     if non_default_scene_module is not None:
-        scene= non_default_scene_module()
+        scene= non_default_scene_module(min_per_step=simulation_period[2])
     else:
-        scene = scene_module.Food_delivery_generator(per_min_base_generate = 40 )
+        scene = scene_module.Food_delivery_generator(per_min_base_generate = 40,min_per_step=simulation_period[2] )
     if non_default_drone_module is not None:
         drone = non_default_drone_module
     else:
@@ -26,7 +26,7 @@ def scene_food_delivery_analysis(
     chargingpower_list = []
     if is_same_scene:
         for simulation in range(num_simulation):
-            order_list, chargingpower_list = food_delivery_simulate_core(
+            order_list_piece, chargingpower_list_piece = food_delivery_simulate_core(
                 num_drone,
                 simulation_period,
                 scene,
@@ -39,6 +39,31 @@ def scene_food_delivery_analysis(
                 standby_drone_battery = 0.9,          #KW
                 least_standby_drone_percent = 0.2,    #KW
             )
+            order_list.append(order_list_piece)
+            chargingpower_list.append(chargingpower_list_piece)
+    else:
+        if non_default_scene_module is not None:
+            scene= non_default_scene_module(min_per_step=simulation_period[2])
+        else:
+            scene = scene_module.Food_delivery_generator(per_min_base_generate = 40 ,min_per_step=simulation_period[2])
+        for simulation in range(num_simulation):
+            order_list_piece, chargingpower_list_piece = food_delivery_simulate_core(
+                num_drone,
+                simulation_period,
+                scene,
+                drone,
+                drone_full_power_at_begin = True,
+                enable_partly_charging = True,
+                charge_strat = 'immediate',
+                minimum_num_charging_drone = 25,
+                power_limit = 100,              #KW
+                standby_drone_battery = 0.9,          #KW
+                least_standby_drone_percent = 0.2,    #KW
+            )
+            order_list.append(order_list_piece)
+            chargingpower_list.append(chargingpower_list_piece)
+    return order_list, chargingpower_list
+        
   
 def food_delivery_simulate_core(
                                 num_drone,

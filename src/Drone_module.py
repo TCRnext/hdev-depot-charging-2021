@@ -30,10 +30,11 @@ class Normal_Drone_Model:
                     now_battery = 1.0, #当前电池容量百分比
                     Ct = 5.0,           #螺旋桨效率5KG/KW
                     TWR_max = 2.0,      #最大推力比
-                    min_litoff_land_time = 1, #最小起降时间(分钟)      
+                    min_litoff_land_time = 1.0, #最小起降时间(分钟)      
                     min_battery = 0,  #最小安全电量     
                     init_status = 0, #初始状态 0-待命 1-起飞 2-充电        
-                    parking_outside_charging_powerlimit = None #外部停机坪充电功率限制                     
+                    parking_outside_charging_powerlimit = None #外部停机坪充电功率限制  
+                                     
                 ):
         self.weight = weight
         self.max_flight_time = max_flight_time

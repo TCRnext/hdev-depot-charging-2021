@@ -20,7 +20,8 @@ class General_delivery_generator:
                 busy_time_weight = [0.5,1,1,0.5] ,                  ## 配送场景中的繁忙时间段权重
                 busy_time_cluster_extra_weight = [0,0.2,0.2,0] ,    ## 配送场景中的繁忙时间段集群额外权重
                 is_center_cluster_tx = True ,                       ## 是否将一个集群发送点设置为中心点
-                per_min_base_generate = 5                           
+                per_min_base_generate = 5   ,
+                min_per_step = 1 ,                                  ## 每分钟生成的配送数量
                 ):
         
         
@@ -38,7 +39,7 @@ class General_delivery_generator:
         self.rx_cluster_weight = rx_cluster_weight
         self.tx_cluster_weight = tx_cluster_weight
         self.non_cluster_weight = non_cluster_weight
-        self.per_min_base_generate = per_min_base_generate
+        self.per_step_base_generate = per_min_base_generate * min_per_step
         ## 生成配送场景 在以半径为range_radius的圆内生成num_clusters_tx个集群发送点和num_clusters_rx个集群接收点
         
         if is_cluster_enable:
@@ -105,7 +106,7 @@ class General_delivery_generator:
             avg_cluster_rx_weight = np.mean(self.rx_cluster_weight) + realtime_busy_time_weight_cluster_extra + realtime_busy_time_weight
             
             avg_non_cluster_weight = self.non_cluster_weight + realtime_busy_time_weight
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate*avg_non_cluster_weight
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate*avg_non_cluster_weight
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -121,7 +122,7 @@ class General_delivery_generator:
                 output_piece = {"tx":tx,"rx":rx,"time":time,"distance":distance,"index of this minute":index}
                 output.append(output_piece)
         else:
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate*(self.non_cluster_weight + realtime_busy_time_weight)
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate*(self.non_cluster_weight + realtime_busy_time_weight)
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -140,7 +141,7 @@ class General_delivery_generator:
             avg_cluster_tx_weight = np.mean(self.tx_cluster_weight)
             avg_cluster_rx_weight = np.mean(self.rx_cluster_weight)
             avg_non_cluster_weight = self.non_cluster_weight
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate
             if generate_num < 0:
                 generate_num = 0
             generate_num = int(generate_num)
@@ -158,7 +159,7 @@ class General_delivery_generator:
                 output_piece = {"tx":tx,"rx":rx,"time":time,"distance":distance}
                 output.append(output_piece)
         else:
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -214,13 +215,14 @@ class P2P_delivery_generator:
                     busy_time = [] ,                                        ## 配送场景中的繁忙时间段(小时)
                     busy_time_length = 0 ,                                  ## 配送场景中的繁忙时间段长度(小时)
                     busy_time_weight = [] ,                                ## 配送场景中的繁忙时间段权重
+                    min_per_step = 1 ,                                     ## 每分钟生成的配送数量
                 ):
         self.is_center = is_center
         self.is_has_charging_station_at_destination = is_has_charging_station_at_destination
         self.range_radius = range_radius
         self.is_busy_time = is_busy_time
         self.num_rx = num_rx
-        self.per_RX_base_generate = per_RX_base_generate
+        self.per_RX_base_generate = per_RX_base_generate * min_per_step
         self.busy_time = []
         self.busy_time_weight = busy_time_weight
         self.is_busy_time = is_busy_time
@@ -231,7 +233,7 @@ class P2P_delivery_generator:
                 self.busy_time.append(busy_time[i] * 60)
 
         self.rx_list = []
-        for i in range(len(num_rx)):
+        for i in range(num_rx):
             rx =[range_radius,range_radius]
             while rx[0]*rx[0] + rx[1]*rx[1] > range_radius*range_radius:
                 rx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
@@ -284,7 +286,7 @@ class P2P_delivery_generator:
 class Taxi_generator(General_delivery_generator):
     def __init__(
                 self ,
-                range_radius = 30 ,                                 ## 出租车场景中的配送半径，eg:30km
+                range_radius = 8 ,                                 ## 出租车场景中的配送半径，eg:30km
                 cluster_radius = 0.5 ,                              ## 出租车场景中的集群半径，eg:0.5km
                 is_cluster_enable = True ,                          ## 是否生成集群
                 is_cluster_mixed = True ,                           ## 是否生成混合集群
@@ -301,11 +303,12 @@ class Taxi_generator(General_delivery_generator):
                 busy_time_weight = [1,0.5,1,0.5] ,                  ## 出租车场景中的繁忙时间段权重
                 busy_time_cluster_extra_weight = [0.2,0,0.2,0] ,    ## 出租车场景中的繁忙时间段集群额外权重
                 is_center_cluster_tx = False ,                      ## 是否将一个集群发送点设置为中心点
-                per_min_base_generate = 5,                          ## 每分钟生成的出租车配送数量
+                per_step_base_generate = 5,                          ## 每分钟生成的出租车配送数量
                 minimum_distance = 3 ,                              ## 出租车配送的最小距离
-                distance_extra_weight = 0.1                         ## 出租车配送距离额外权重
+                distance_extra_weight = 0.1 ,                        ## 出租车配送距离额外权重
+                min_per_step = 1 ,                                   ## 每分钟生成的配送数量
                 ):
-        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_min_base_generate)
+        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_step_base_generate,min_per_step)
         self.is_cluster_mixed = is_cluster_mixed
         if is_cluster_mixed:
             self.num_clusters_rx = num_clusters_rx + num_clusters_mixed
@@ -340,7 +343,7 @@ class Taxi_generator(General_delivery_generator):
             avg_cluster_rx_weight = np.mean(self.rx_cluster_weight) + realtime_busy_time_weight_cluster_extra + realtime_busy_time_weight
             
             avg_non_cluster_weight = self.non_cluster_weight + realtime_busy_time_weight
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate*avg_non_cluster_weight
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate*avg_non_cluster_weight
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -359,7 +362,7 @@ class Taxi_generator(General_delivery_generator):
                         break
                 output.append(output_piece)
         else:
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate*(self.non_cluster_weight + realtime_busy_time_weight)
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate*(self.non_cluster_weight + realtime_busy_time_weight)
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -380,7 +383,7 @@ class Taxi_generator(General_delivery_generator):
             avg_cluster_tx_weight = np.mean(self.tx_cluster_weight)
             avg_cluster_rx_weight = np.mean(self.rx_cluster_weight)
             avg_non_cluster_weight = self.non_cluster_weight
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate
             if generate_num < 0:
                 generate_num = 0
             generate_num = int(generate_num)
@@ -401,7 +404,7 @@ class Taxi_generator(General_delivery_generator):
                         break
                 output.append(output_piece)
         else:
-            generate_num = random.gauss(1,0.33)*self.per_min_base_generate
+            generate_num = random.gauss(1,0.33)*self.per_step_base_generate
             generate_num = int(generate_num)
             
             for i in range(generate_num):
@@ -429,17 +432,21 @@ class Taxi_generator(General_delivery_generator):
             output[i]["distance"] = output[i]["distance"]*(1+self.distance_extra_weight)
         return output
         
+        
+class Goods_delivery_generator(P2P_delivery_generator):
     def __init__(
         self ,
-        range_radius = 5 ,                                     ## 配送场景中的配送半径，eg:5km
+        range_radius = 15 ,                                    ## 配送场景中的配送半径，eg:20km
         num_rx = 50 ,                                          ## 配送场景中的接收点数量
+        is_has_charging_station_at_destination = False ,       ## 是否在接收点设置充电站
         is_busy_time = False ,                                 ## 是否设置繁忙时间段
-        per_RX_base_generate = 2 ,                             ## 每分钟生成的接收点数量
+        per_RX_base_generate = 5 ,                             ## 每分钟生成的接收点数量
         cluster_extra_distance = 0.5 ,                         ## 配送场景中的集群额外距离
         cluster_num_avg = 5 ,                                  ## 配送场景中的集群数量平均值
         cluster_num_std = 2 ,                                  ## 配送场景中的集群数量标准差
+        min_per_step = 1 ,                                     ## 每分钟生成的配送数量
     ):
-        super().__init__(False,False,range_radius,num_rx,is_busy_time,per_RX_base_generate,[],0,[])
+        super().__init__(False,is_has_charging_station_at_destination,range_radius,num_rx,is_busy_time,per_RX_base_generate,[],0,[],min_per_step)
         self.cluster_extra_distance = cluster_extra_distance
         self.cluster_num_avg = cluster_num_avg
         self.cluster_num_std = cluster_num_std
@@ -498,11 +505,11 @@ class Food_delivery_generator(General_delivery_generator):
                 busy_time_weight = [0.5,1,1,0.5] ,                  ## 食物配送场景中的繁忙时间段权重
                 busy_time_cluster_extra_weight = [0,0.2,0.2,0] ,    ## 食物配送场景中的繁忙时间段集群额外权重
                 is_center_cluster_tx = True ,                       ## 是否将一个集群发送点设置为中心点
-                per_min_base_generate = 5,                           ## 每分钟生成的食品配送数量
+                per_step_base_generate = 5,                           ## 每分钟生成的食品配送数量
                 distance_extra_weight = 0.1                         ## 食品配送距离额外权重
                 
                 ):
-        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_min_base_generate)
+        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_step_base_generate)
         self.distance_extra_weight = distance_extra_weight
         
     def generate(self,time):
