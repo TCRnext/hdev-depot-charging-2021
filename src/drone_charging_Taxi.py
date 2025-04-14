@@ -19,7 +19,7 @@ def scene_Taxi_analysis(
     simulation_period = (6*60,24*60,1),
     num_simulation = 1,
     is_same_scene = True,
-    charge_strat = 'Limited_power', #充电策略 
+    charge_strat = 'immediate', #充电策略 
     minimum_num_charging_drone = 25,
     power_limit = 950,              #KW
     standby_drone_battery = 0.9,          #KW
@@ -98,8 +98,7 @@ def Taxi_simulate_core(
                                 minimum_num_charging_drone = 25,
                                 power_limit = 100,              #KW
                                 standby_drone_battery = 0.9,          #KW
-                                least_standby_drone_percent = 0.2,    #KW
-                                
+                                least_standby_drone_percent = 0.2,    #KW                         
                                 ):
     assert charge_strat in ['immediate', 
                         'Limited_power', 
@@ -112,17 +111,14 @@ def Taxi_simulate_core(
     drone_list = []
     chargingpower_list = []
 
-    random.seed(0)
-    np.random.seed(0)
+
     
     if drone_full_power_at_begin:
         drone_example.now_battery = 1.0
     
     for i in range(num_drone):
         drone_list.append(copy.deepcopy(drone_example))
-            
-    #debug_flag_2 = 0 ## 0-standby 1-flight 2-charge
-    #debug_status_list = ["standby","flight","charge"] 
+
     
     for time in range(simulation_period[0],simulation_period[1],simulation_period[2]):
         
@@ -223,14 +219,24 @@ def Taxi_simulate_core(
     for drone in drone_list:
         battery_total += (1-drone.now_battery)
     delta_battery_energy = battery_total * drone.max_battery_energy 
-    #print("订单共有",len(order_list),"个") 
-    #print(chargingpower_list)                        
+                        
     return order_list, chargingpower_list, delta_battery_energy
 
 
 if __name__ == '__main__':
+    charge_strat = 'Least_standby'
+    least_standby_drone_percent = 0.45
+    #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 
+    random.seed(0)
+    np.random.seed(0)
     simulation_period = (6*60,24*60,1)
-    order_list ,chargingpower_list ,delta_battery_energy_list  = scene_Taxi_analysis(simulation_period = simulation_period)
+    order_list ,chargingpower_list ,delta_battery_energy_list  = scene_Taxi_analysis(
+        simulation_period = simulation_period ,
+        charge_strat= charge_strat,
+        num_drone= 100,
+        num_simulation = 10,
+        least_standby_drone_percent = least_standby_drone_percent,
+        )
     peak_chargingpower_list = []
     avg_chargingpower_list = []
     
@@ -238,7 +244,7 @@ if __name__ == '__main__':
         order_list_piece = order_list[i]
         chargingpower_list_piece = chargingpower_list[i]
         delta_battery_energy = delta_battery_energy_list[i]
-        print("第",i,"次模拟")
+        print("第",i+1,"次模拟")
         print("订单共有",len(order_list_piece),"个")
         total_time = 0
         total_delay = 0
@@ -278,14 +284,18 @@ if __name__ == '__main__':
             time_list.append((chargingpower_1min[0]*60.0 + chargingpower_1min[1])/60.0)
             p_list.append(chargingpower_1min[2])
         if i == max_index:
-            ax.plot(time_list ,p_list ,color = '#00BFFF', linewidth = 2)
+            ax.plot(time_list ,p_list ,color = '#00BFFF', linewidth = 1)
         else:
-            ax.plot(time_list ,p_list ,color = '#87CEFA', linewidth = 0.2,alpha=0.4)
+            ax.plot(time_list ,p_list ,color = '#87CEFA', linewidth = 0.3,alpha=0.4)
     # 设置x轴和y轴的标签
     ax.set_xlabel('time(h)')
     ax.set_ylabel('charging power(KW)')
     # 设置标题
-    ax.set_title('charging power')
+    ax.set_title('charging power of taxi drone with ' + charge_strat + ' strategy')
+    # 设置备注,保留到整数
+    ax.text(simulation_period[1]/60.0*0.8, max (peak_chargingpower_list)*0.3, 'Peak charging power: ' + str(int(peak_chargingpower_list[max_index])) + 'KW', ha='center', va='center', fontsize=10, color='#000000')
+    ax.text(simulation_period[1]/60.0*0.8, max (peak_chargingpower_list)*0.15, 'Avg charging power: ' + str(int(avg_chargingpower_list[max_index])) + 'KW', ha='center', va='center', fontsize=10, color='#000000')
+    
     # 显示图形
     plt.show()
     # 保存图形,生成时间戳
