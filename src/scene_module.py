@@ -298,12 +298,12 @@ class Taxi_generator(General_delivery_generator):
                 mixed_cluster_weight = [2,2,2,2,2,2,2,2,2,2] ,      ## 出租车场景中的混合集群权重
                 non_cluster_weight = 1 ,                            ## 出租车场景中的非集群权重
                 is_busy_time = True ,                               ## 是否设置繁忙时间段
-                busy_time = [8,12,18,20] ,                          ## 出租车场景中的繁忙时间段(小时)
+                busy_time = [8,12,18] ,                          ## 出租车场景中的繁忙时间段(小时)
                 busy_time_length = 2 ,                              ## 出租车场景中的繁忙时间段长度(小时)
-                busy_time_weight = [1,0.5,1,0.5] ,                  ## 出租车场景中的繁忙时间段权重
-                busy_time_cluster_extra_weight = [0.2,0,0.2,0] ,    ## 出租车场景中的繁忙时间段集群额外权重
+                busy_time_weight = [2.5,0.25,2.0] ,                  ## 出租车场景中的繁忙时间段权重
+                busy_time_cluster_extra_weight = [0.2,0,0.2] ,    ## 出租车场景中的繁忙时间段集群额外权重
                 is_center_cluster_tx = False ,                      ## 是否将一个集群发送点设置为中心点
-                per_step_base_generate = 5,                          ## 每分钟生成的出租车配送数量
+                per_step_base_generate = 1,                          ## 每分钟生成的出租车配送数量
                 minimum_distance = 3 ,                              ## 出租车配送的最小距离
                 distance_extra_weight = 0.1 ,                        ## 出租车配送距离额外权重
                 min_per_step = 1 ,                                   ## 每分钟生成的配送数量

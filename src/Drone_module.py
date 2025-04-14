@@ -76,7 +76,7 @@ class Normal_Drone_Model:
             return False
         if is_P2P_path:
             if is_single_path:
-                battery = self.now_battery*(1-(2*self.min_litoff_land_time+distance/self.max_flight_time)/self.max_flight_time)
+                battery = self.now_battery-(2*self.min_litoff_land_time+distance/self.max_flight_time)/self.max_flight_time
                 if battery < self.min_battery:
                     return False
                 else:
@@ -90,7 +90,7 @@ class Normal_Drone_Model:
                         self.parking_to_center_distance = 0
                     return True            
             else:
-                battery = self.now_battery*(1-(4*self.min_litoff_land_time+2*distance/self.max_flight_time)/self.max_flight_time)
+                battery = self.now_battery-(4*self.min_litoff_land_time+2*distance/self.max_flight_time)/self.max_flight_time
                 if battery < self.min_battery:
                     return False
                 else:
@@ -100,7 +100,7 @@ class Normal_Drone_Model:
                     return True             
 
         else:
-            battery = self.now_battery*(1-(6*self.min_litoff_land_time+distance/self.max_flight_time)/self.max_flight_time)
+            battery = self.now_battery-(6*self.min_litoff_land_time+distance/self.max_flight_time)/self.max_flight_time
             if battery < self.min_battery:
                 return False
             else:
