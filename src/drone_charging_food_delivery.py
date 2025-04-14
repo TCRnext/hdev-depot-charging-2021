@@ -1,4 +1,3 @@
-from anyio import current_time
 from matplotlib.pylab import f
 import drone_module
 import scene_module

@@ -1,7 +1,7 @@
 import math
 import random
 import numpy as np
-
+import copy
 
 class General_delivery_generator:
     def __init__(
@@ -36,8 +36,8 @@ class General_delivery_generator:
         self.num_clusters_tx = num_clusters_tx
         self.num_clusters_rx = num_clusters_rx
         self.is_center_cluster_tx = is_center_cluster_tx
-        self.rx_cluster_weight = rx_cluster_weight
-        self.tx_cluster_weight = tx_cluster_weight
+        self.rx_cluster_weight = copy.deepcopy(rx_cluster_weight)
+        self.tx_cluster_weight = copy.deepcopy(tx_cluster_weight)
         self.non_cluster_weight = non_cluster_weight
         self.per_step_base_generate = per_min_base_generate * min_per_step
         ## 生成配送场景 在以半径为range_radius的圆内生成num_clusters_tx个集群发送点和num_clusters_rx个集群接收点
@@ -73,8 +73,8 @@ class General_delivery_generator:
         if is_busy_time:
             self.is_busy_time = True
             self.busy_time_length = busy_time_length*60
-            self.busy_time_weight = busy_time_weight
-            self.busy_time_cluster_extra_weight = busy_time_cluster_extra_weight
+            self.busy_time_weight = copy.deepcopy(busy_time_weight)
+            self.busy_time_cluster_extra_weight = copy.deepcopy(busy_time_cluster_extra_weight)
         else:
             self.is_busy_time = False
              
@@ -224,7 +224,7 @@ class P2P_delivery_generator:
         self.num_rx = num_rx
         self.per_RX_base_generate = per_RX_base_generate * min_per_step
         self.busy_time = []
-        self.busy_time_weight = busy_time_weight
+        self.busy_time_weight = copy.deepcopy(busy_time_weight)
         self.is_busy_time = is_busy_time
         
         if is_busy_time:
@@ -308,7 +308,7 @@ class Taxi_generator(General_delivery_generator):
                 distance_extra_weight = 0.1 ,                        ## 出租车配送距离额外权重
                 min_per_step = 1 ,                                   ## 每分钟生成的配送数量
                 ):
-        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_step_base_generate,min_per_step)
+        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,copy.deepcopy(tx_cluster_weight),copy.deepcopy(rx_cluster_weight),non_cluster_weight,is_busy_time,copy.deepcopy(busy_time),busy_time_length,copy.deepcopy(busy_time_weight),copy.deepcopy(busy_time_cluster_extra_weight),is_center_cluster_tx,per_step_base_generate,min_per_step)
         self.is_cluster_mixed = is_cluster_mixed
         if is_cluster_mixed:
             self.num_clusters_rx = num_clusters_rx + num_clusters_mixed
@@ -418,7 +418,6 @@ class Taxi_generator(General_delivery_generator):
                 output.append(output_piece)
         return output
 
-
     def generate(self,time):
         output = []
         if self.is_busy_time:
@@ -431,7 +430,6 @@ class Taxi_generator(General_delivery_generator):
         for i in range(len(output)):
             output[i]["distance"] = output[i]["distance"]*(1+self.distance_extra_weight)
         return output
-        
         
 class Goods_delivery_generator(P2P_delivery_generator):
     def __init__(
@@ -509,7 +507,7 @@ class Food_delivery_generator(General_delivery_generator):
                 distance_extra_weight = 0.1                         ## 食品配送距离额外权重
                 
                 ):
-        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,tx_cluster_weight,rx_cluster_weight,non_cluster_weight,is_busy_time,busy_time,busy_time_length,busy_time_weight,busy_time_cluster_extra_weight,is_center_cluster_tx,per_step_base_generate)
+        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,copy.deepcopy(tx_cluster_weight),copy.deepcopy(rx_cluster_weight),non_cluster_weight,is_busy_time,copy.deepcopy(busy_time),busy_time_length,copy.deepcopy(busy_time_weight),copy.deepcopy(busy_time_cluster_extra_weight),is_center_cluster_tx,per_step_base_generate)
         self.distance_extra_weight = distance_extra_weight
         
     def generate(self,time):

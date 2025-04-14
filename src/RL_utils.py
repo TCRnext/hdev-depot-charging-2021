@@ -1,9 +1,3 @@
-from json import load
-from operator import index
-from re import U
-import re
-from sre_parse import State
-from colorama import init
 import gym
 from matplotlib.pylab import f
 import numpy as np
@@ -91,9 +85,9 @@ class Drone_charging_env(gym.Env):
             "standby_drone_battery_info":[0,0,0,0,0,0,0,0,0,0.99],
             "charging_drone_info":np.zeros(1),
             "task_drone_info":np.zeros(1),
-            "current_time":self.time_info[0],
-            "current_order_num":0,
-            "existing_order_num":0
+            "current_time":[self.time_info[0]],
+            "current_order_num":[0],
+            "existing_order_num":[0]
         }
         
         if self.use_external_data is False:
@@ -179,7 +173,7 @@ class Drone_charging_env(gym.Env):
         return
     
     def simulate_once(self,one_scene:Union[scene_module.Taxi_generator,scene_module.Goods_delivery_generator]):
-        drone_private:drone_module.Normal_Drone_Model = self.drone.deepcopy()
+        drone_private:drone_module.Normal_Drone_Model = copy.deepcopy(self.drone)
         if self.Full_battery_at_start:
             drone_private.now_battery = 1.0
         
@@ -190,7 +184,9 @@ class Drone_charging_env(gym.Env):
         order_fifo = []
         power_list = []
         order_list = []
-        
+        minimum_num_charging_drone_percent = 0.25
+        minimum_num_charging_drone = self.drone_num * minimum_num_charging_drone_percent
+
         for time in range(self.time_info[0],self.time_info[1],self.time_info[2]):
             piece = one_scene.generate(time)
             for order in piece:
@@ -201,7 +197,7 @@ class Drone_charging_env(gym.Env):
                 for drone in drone_list:
                     if drone.drone_status == drone.status_charge and self.enable_partly_charging == False:
                         continue
-                    if drone.status_to_flight(order['distance'],is_single_path = self.enable_charging_outside,is_P2P_path = self.enable_charging_outside) == False:
+                    if drone.status_to_flight(order['distance'],is_single_path = self.enable_charging_outside,is_P2P_path = self.enable_charging_outside) :
                         order_is_finished.append(order)
                         order['tx_time'] = time
                         order['rx_time'] = time + drone.flight_time_left
@@ -212,34 +208,53 @@ class Drone_charging_env(gym.Env):
                 order_fifo.remove(order)
 
             current_charging_power = 0
-            num_charging_drone = 0
-            num_standby_drone = 0
-            standby_drone_battery = 0.9
-            least_standby_drone_percent = 0.2
-            minimum_num_charging_drone_percent = 0.25
-            minimum_num_charging_drone = self.drone_num * minimum_num_charging_drone_percent
-            num_drone = self.drone_num 
-            
+            current_is_charging_drone = 0
+            drone:drone_module.Normal_Drone_Model
             for drone in drone_list:
                 drone.update_status(self.time_info[2])
-                if drone.is_parking_outside == False:
+
+            num_charging_drone = 0
+            if True:
+                for drone in drone_list:
                     if drone.drone_status == drone.status_charge:
                         num_charging_drone += 1
-                        current_charging_power += drone.current_charge_power
+                if num_charging_drone < minimum_num_charging_drone:
+                    for drone in drone_list:
+                        if drone.drone_status == drone.status_standby and drone.now_battery < 0.99:
+                            drone.status_to_charge()
+                            num_charging_drone += 1
+                        if num_charging_drone >= minimum_num_charging_drone:
+                            break
+            else:
+                standby_drone_battery = 0.9
+                least_standby_drone_percent = 0.25
+                num_drone = len(drone_list)
+
+                num_standby_drone = 0
+                num_charging_drone = 0
+                for drone in drone_list:
                     if drone.drone_status == drone.status_standby and drone.now_battery < standby_drone_battery:
                         num_standby_drone += 1
-    
-        
-            if num_standby_drone < num_drone * least_standby_drone_percent:
-                num_need_charge = max(minimum_num_charging_drone , int(num_drone * least_standby_drone_percent) - num_standby_drone) - num_charging_drone
+                    if drone.drone_status == drone.status_charge:
+                        num_charging_drone += 1
+                if num_standby_drone < num_drone * least_standby_drone_percent:
+                    num_need_charge = max(minimum_num_charging_drone , int(num_drone * least_standby_drone_percent) - num_standby_drone) - num_charging_drone
+                for drone in drone_list:
+                    if num_need_charge <= 0:
+                        break
+                    if drone.drone_status == drone.status_standby and drone.now_battery < 0.99:
+                        drone.status_to_charge()
+                        num_need_charge -= 1
+
+
             for drone in drone_list:
-                if num_need_charge <= 0:
-                    break
-                if drone.drone_status == drone.status_standby and drone.now_battery < standby_drone_battery:
-                    drone.status_to_charge()
-                    num_need_charge -= 1
+                if drone.is_parking_outside == False:
+                    if drone.drone_status == drone.status_charge:
+                        current_is_charging_drone += 1
+                        current_charging_power += drone.current_charge_power
             power_list.append(current_charging_power)
-        
+            
+
         avg_power = np.average(power_list)
         max_power = np.max(power_list)
         return order_list,max_power,avg_power
@@ -266,7 +281,8 @@ class Drone_charging_env(gym.Env):
         power_reward = self.handle_drone(max_drone_num_to_charge,drone_battery_threshold)
         reward = delay_reward + power_reward
         
-        if self.state["current_time"] >= self.time_info[1]:
+        self.state["current_time"][0] += self.time_info[2]
+        if self.state["current_time"][0] > self.time_info[1]:
             done = True
             if self.index == self.max_index:
                 truncated = True

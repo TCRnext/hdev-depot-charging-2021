@@ -14,15 +14,20 @@ def scene_Taxi_analysis(
     non_default_drone_module = None,
     num_drone = 100,
     simulation_period = (0*60,24*60,1),
-    num_simulation = 10,
+    num_simulation = 1,
     is_same_scene = True,
-    charge_strat = 'Least_standby', #充电策略 
+    charge_strat = 'immediate', #充电策略 
     minimum_num_charging_drone = 25,
     power_limit = 100,              #KW
     standby_drone_battery = 0.9,          #KW
     least_standby_drone_percent = 0.2,    #KW
     
 ):
+    assert charge_strat in ['immediate', 
+                        'Limited_power', 
+                        'Least_standby',
+                        'delayed'
+                        ], "charge_strat not recognized!"
     drone_list = []
     if non_default_scene_module is not None:
         scene= non_default_scene_module(min_per_step=simulation_period[2])
@@ -132,17 +137,11 @@ def Taxi_simulate_core(
         if len(order_fifo) > 0:
             print("delayed at",time//60,":",time%60)
         
-        current_charging_power = 0
-        current_is_charging_drone = 0
+
         drone:drone_module.Normal_Drone_Model
         for drone in drone_list:
             drone.update_status(simulation_period[2])
-            if drone.is_parking_outside == False:
-                if drone.drone_status == drone.status_charge:
-                    current_is_charging_drone += 1
-                    current_charging_power += drone.current_charge_power
-                
-        chargingpower_list.append((time//60,time%60,current_charging_power,current_is_charging_drone))
+
      
         if charge_strat == 'immediate':
             for drone in drone_list:
@@ -181,7 +180,7 @@ def Taxi_simulate_core(
                     num_charging_drone += 1
             if num_charging_drone < minimum_num_charging_drone:
                 for drone in drone_list:
-                    if drone.drone_status == drone.status_standby and drone.now_battery < 0.99:
+                    if drone.drone_status == drone.status_standby and drone.now_battery < 0.2:
                         drone.status_to_charge()
                         num_charging_drone += 1
                     if num_charging_drone >= minimum_num_charging_drone:
@@ -189,6 +188,16 @@ def Taxi_simulate_core(
         if(time%60 == 0):
             print("time:",time//60)
 
+        current_charging_power = 0
+        current_is_charging_drone = 0
+        for drone in drone_list:
+            if drone.is_parking_outside == False:
+                if drone.drone_status == drone.status_charge:
+                    current_is_charging_drone += 1
+                    current_charging_power += drone.current_charge_power
+                
+        chargingpower_list.append((time//60,time%60,current_charging_power,current_is_charging_drone))
+        
                 
     #print("订单共有",len(order_list),"个") 
     #print(chargingpower_list)                        
@@ -256,11 +265,11 @@ if __name__ == '__main__':
     # 保存图形,生成时间戳
     import time
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    plt.savefig('charging_power_' + timestamp + '.png')
+    #plt.savefig('charging_power_' + timestamp + '.png')
 
     #保存数据到csv文件,生成时间戳
     df = pd.DataFrame(chargingpower_list)
-    df.to_csv('chargingpower_list_' + timestamp + '.csv', index=True)
+    #df.to_csv('chargingpower_list_' + timestamp + '.csv', index=True)
     df = pd.DataFrame(order_list)
-    df.to_csv('order_list_' + timestamp + '.csv', index=True)
+    #df.to_csv('order_list_' + timestamp + '.csv', index=True)
     
