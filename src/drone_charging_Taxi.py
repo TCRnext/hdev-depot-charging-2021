@@ -226,6 +226,7 @@ def Taxi_simulate_core(
 if __name__ == '__main__':
     charge_strat = 'Least_standby'
     least_standby_drone_percent = 0.45
+    minimum_num_charging_drone = 30
     #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 
     random.seed(0)
     np.random.seed(0)
@@ -236,6 +237,7 @@ if __name__ == '__main__':
         num_drone= 100,
         num_simulation = 10,
         least_standby_drone_percent = least_standby_drone_percent,
+        minimum_num_charging_drone = 30
         )
     peak_chargingpower_list = []
     avg_chargingpower_list = []

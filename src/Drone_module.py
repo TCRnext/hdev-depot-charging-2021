@@ -81,7 +81,7 @@ class Normal_Drone_Model:
                     return False
                 else:
                     self.now_battery = battery
-                    self.flight_time_left = 2*self.min_litoff_land_time+distance/self.max_speed
+                    self.flight_time_left = 2*self.min_litoff_land_time+distance/self.max_speed*60
                     self.drone_status = self.status_flight
                     if self.is_parking_outside == False:
                         self.is_parking_outside = True
@@ -95,7 +95,7 @@ class Normal_Drone_Model:
                     return False
                 else:
                     self.now_battery = battery
-                    self.flight_time_left = 4*self.min_litoff_land_time+2*distance/self.max_speed
+                    self.flight_time_left = 4*self.min_litoff_land_time+2*distance/self.max_speed*60
                     self.drone_status = self.status_flight
                     return True             
 
@@ -105,7 +105,7 @@ class Normal_Drone_Model:
                 return False
             else:
                 self.now_battery = battery
-                self.flight_time_left = 6*self.min_litoff_land_time+distance/self.max_speed
+                self.flight_time_left = 6*self.min_litoff_land_time+distance/self.max_speed*60
                 self.drone_status = self.status_flight
                 return True
     

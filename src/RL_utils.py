@@ -1,3 +1,5 @@
+from doctest import debug
+import re
 import gym
 from matplotlib.pylab import f
 import numpy as np
@@ -52,14 +54,11 @@ class Drone_charging_env(gym.Env):
         
         """
             动作空间：
-            最大无人机充电数量(占比)(离散化 10%-100%) 1-10
-            转为充电状态无人机的最低电量阈值(离散化 20%-80% 按10%)   2-8 
+            最大无人机充电数量(占比)(离散化 5%-100%) 1-20
+           
         """
         
-        self.action_space = spaces.Dict({
-            "max_drone_percent_to_charge":spaces.Discrete(10,start=1),
-            "drone_battery_threshold":spaces.Discrete(7,start=2)
-        })
+        self.action_space = spaces.Discrete(100,start=1)
         
 
         """
@@ -106,7 +105,7 @@ class Drone_charging_env(gym.Env):
 
             
         self.max_index = 0
-        self.order_index = 0
+        self.order_index_this_run = 0
         self.index = None
         self.max_power_this_run = 0
         self.avg_power_this_run = 0
@@ -116,9 +115,10 @@ class Drone_charging_env(gym.Env):
         self.order_fifo_this_run = []
         self.handle_order_this_run = []
         self.SLA_this_run = []
+        self.mode = 'default'
         self.reset()
         
-        self.mode = 'default'
+        
         return
     
     def seed(self, seed=None):
@@ -214,35 +214,42 @@ class Drone_charging_env(gym.Env):
                 drone.update_status(self.time_info[2])
 
             num_charging_drone = 0
+            num_drone = len(drone_list)
+            standby_drone_battery = 0.9
+            least_standby_drone_percent = 0.45
             if True:
+                num_charging_drone = 0
                 for drone in drone_list:
                     if drone.drone_status == drone.status_charge:
                         num_charging_drone += 1
+                    elif drone.drone_status == drone.status_standby and drone.now_battery < 0.25:
+                        drone.status_to_charge()
+                        num_charging_drone += 1
+                    if  num_charging_drone >= minimum_num_charging_drone *1.5:
+                        break
                 if num_charging_drone < minimum_num_charging_drone:
                     for drone in drone_list:
-                        if drone.drone_status == drone.status_standby and drone.now_battery < 0.99:
+                        if drone.drone_status == drone.status_standby and drone.now_battery < 0.9:
                             drone.status_to_charge()
                             num_charging_drone += 1
                         if num_charging_drone >= minimum_num_charging_drone:
                             break
             else:
-                standby_drone_battery = 0.9
-                least_standby_drone_percent = 0.25
-                num_drone = len(drone_list)
-
                 num_standby_drone = 0
                 num_charging_drone = 0
                 for drone in drone_list:
-                    if drone.drone_status == drone.status_standby and drone.now_battery < standby_drone_battery:
+                    if drone.drone_status == drone.status_standby and drone.now_battery > standby_drone_battery:
                         num_standby_drone += 1
                     if drone.drone_status == drone.status_charge:
                         num_charging_drone += 1
                 if num_standby_drone < num_drone * least_standby_drone_percent:
-                    num_need_charge = max(minimum_num_charging_drone , int(num_drone * least_standby_drone_percent) - num_standby_drone) - num_charging_drone
+                    num_need_charge =  num_drone * least_standby_drone_percent - num_charging_drone
+                else:
+                    num_need_charge =  num_drone * least_standby_drone_percent*3/4 - num_charging_drone
                 for drone in drone_list:
                     if num_need_charge <= 0:
                         break
-                    if drone.drone_status == drone.status_standby and drone.now_battery < 0.99:
+                    if drone.drone_status == drone.status_standby and drone.now_battery < 0.9:
                         drone.status_to_charge()
                         num_need_charge -= 1
 
@@ -253,9 +260,14 @@ class Drone_charging_env(gym.Env):
                         current_is_charging_drone += 1
                         current_charging_power += drone.current_charge_power
             power_list.append(current_charging_power)
-            
+        battery_total = 0   
+        for drone in drone_list:
+            battery_total += (1-drone.now_battery)
+        delta_battery_energy = battery_total * drone.max_battery_energy 
 
         avg_power = np.average(power_list)
+        avg_power = (avg_power *(self.time_info[1]-self.time_info[0])/60 + delta_battery_energy) / 24
+        
         max_power = np.max(power_list)
         return order_list,max_power,avg_power
 
@@ -273,31 +285,131 @@ class Drone_charging_env(gym.Env):
         return
 
     def step(self, action):
-        max_drone_num_to_charge = action["max_drone_percent_to_charge"]/10.0*self.drone_num
-        drone_battery_threshold = action["drone_battery_threshold"]/10.0
+        done = False
+        truncated = False
+        reward = 0.0
+        current_time = self.state["current_time"][0]
+        current_order_num = 0
+        if self.order_index_this_run < len(self.order_list_this_run):
+            while current_time >= self.order_list_this_run[self.order_index_this_run]['time']:
+                current_order_num += 1
+                self.order_fifo_this_run.append(self.order_list_this_run[self.order_index_this_run])
+                self.order_index_this_run += 1
+                if self.order_index_this_run >= len(self.order_list_this_run):
+                    break
+        self.state["current_order_num"][0] = current_order_num
+        self.state["existing_order_num"][0] = len(self.order_fifo_this_run)
+
+        order_is_finished = []
+        reward_order = 0
+        for order in self.order_fifo_this_run:
+            for drone in self.drone_list_this_run:
+                if drone.drone_status == drone.status_charge and self.enable_partly_charging == False:
+                    continue
+                if drone.drone_status == drone.status_flight:
+                    continue
+                if drone.status_to_flight(order['distance'],is_single_path = self.enable_charging_outside,is_P2P_path = self.enable_charging_outside) == True:
+                    order_is_finished.append(order)
+                    reward_order += (self.delay_reward_base + self.delay_reward_k *(current_time - order['time']))
+                    order['tx_time'] = current_time
+                    order['rx_time'] = current_time + drone.flight_time_left
+                    self.handle_order_this_run.append(copy.deepcopy(order))
+                    break
         
-        self.load_order_to_fifo(self.state["current_time"])
-        delay_reward = self.handle_order(self.state["current_time"])
-        power_reward = self.handle_drone(max_drone_num_to_charge,drone_battery_threshold)
-        reward = delay_reward + power_reward
         
-        self.state["current_time"][0] += self.time_info[2]
-        if self.state["current_time"][0] > self.time_info[1]:
+        for order in order_is_finished:
+            self.order_fifo_this_run.remove(order)
+        
+        if len(self.order_fifo_this_run) != 0:
+            #print("delay at time:",current_time/60.0,"h")
+            pass
+            
+        for drone in self.drone_list_this_run:
+            drone.update_status(self.time_info[2])
+        num_charging_drone = 0
+        max_drone_num_to_charge = action * 0.01 * self.drone_num
+        minimum_num_charging_drone = max_drone_num_to_charge * 0.80
+
+
+
+        num_charging_drone = 0
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_charge:
+                num_charging_drone += 1
+                
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_standby and drone.now_battery < 0.25:
+                drone.status_to_charge()
+                num_charging_drone += 1
+            if  num_charging_drone >= max_drone_num_to_charge:
+                break
+        if num_charging_drone < minimum_num_charging_drone:
+            for drone in self.drone_list_this_run:
+                if drone.drone_status == drone.status_standby and drone.now_battery < 0.9:
+                    drone.status_to_charge()
+                    num_charging_drone += 1
+                if num_charging_drone >= minimum_num_charging_drone:
+                    break        
+        
+        
+        standby_drone_list = []
+        current_charging_power = 0
+        num_charging_drone = 0
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_charge:
+                num_charging_drone += 1
+                current_charging_power += drone.current_charge_power
+            if drone.drone_status == drone.status_standby :
+                standby_drone_list.append(drone.now_battery)
+                
+        num_tasking_drone = self.drone_num - len(standby_drone_list) - num_charging_drone
+
+        
+        standby_drone_list.sort(reverse=False)
+        standby_drone_battery_list = np.zeros(10)
+        temp = 1
+        
+        for battery in standby_drone_list:
+            if battery > temp * 0.1:
+                temp +=1
+            standby_drone_battery_list[temp-1] += 1.0/self.drone_num            
+        
+        
+        self.power_list_this_run.append(current_charging_power)
+        power_reward = 0
+        if current_charging_power < self.avg_power_this_run-0.1:
+            power_reward = self.power_reward_base_1 + self.power_reward_k_1 * (self.avg_power_this_run - current_charging_power)
+        elif current_charging_power > self.max_power_this_run+0.1:
+            power_reward = self.power_reward_base_2 + self.power_reward_k_2 * (current_charging_power - self.max_power_this_run)
+        else:
+            power_reward = self.power_reward_A                
+
+        self.state["standby_drone_battery_info"] = standby_drone_battery_list
+        self.state["charging_drone_info"] = np.array([num_tasking_drone/self.drone_num])
+        self.state["task_drone_info"] = np.array([num_charging_drone/self.drone_num])        
+        
+        reward = reward_order + power_reward
+        current_time += self.time_info[2]
+        self.state["current_time"][0] = current_time
+        if current_time >= self.time_info[1]:
             done = True
-            if self.index == self.max_index:
+            truncated = False
+            if self.index +1 > self.max_index:
                 truncated = True
-            else:   
-                truncated = False
-    
-        return self.state,reward,done,truncated,[]
+                    
+        return self.state,reward,done,truncated,{}
 
     def load_order_to_fifo(self,current_time):
         current_order_num = 0
-        while current_time <= self.order_list_this_run[self.order_index]['time']:
+        if self.order_index_this_run >= len(self.order_list_this_run):
+            self.state["current_order_num"] = current_order_num
+            self.state["existing_order_num"] = len(self.order_fifo_this_run)
+            return
+        while current_time >= self.order_list_this_run[self.order_index_this_run]['time']:
             current_order_num += 1
-            self.order_fifo_this_run.append(self.order_list_this_run[self.order_index])
-            self.order_index += 1
-            if self.order_index >= len(self.order_list_this_run):
+            self.order_fifo_this_run.append(self.order_list_this_run[self.order_index_this_run])
+            self.order_index_this_run += 1
+            if self.order_index_this_run >= len(self.order_list_this_run):
                 break
         self.state["current_order_num"] = current_order_num
         self.state["existing_order_num"] = len(self.order_fifo_this_run)
@@ -323,42 +435,53 @@ class Drone_charging_env(gym.Env):
         return reward_order
 
     def handle_drone(self,max_drone_num_to_charge,drone_battery_threshold):
+        min_drone_num_to_charge = 0.67 * max_drone_num_to_charge
+        drone_num_charging = 0
         list_standby_drone = []
-        current_charging_power = 0
-        current_is_charging_drone = 0
         for drone in self.drone_list_this_run:
             drone.update_status(self.time_info[2])
-            if drone.is_parking_outside == False:
-                if drone.drone_status == drone.status_charge:
-                    current_is_charging_drone += 1
-                    current_charging_power += drone.current_charge_power
-                elif drone.drone_status == drone.status_standby:
-                    list_standby_drone.append(drone)
-        current_is_standby_drone = len(list_standby_drone)
-        current_is_tasking_drone = self.drone_num - current_is_standby_drone - current_is_charging_drone
-        self.power_list_this_run.append((time//60,time%60,current_charging_power,current_is_charging_drone))        
-        
-        #根据电量对list_standby_drone进行排序
-        list_standby_drone.sort(key=lambda x: x.now_battery, reverse=True)
+            if drone.drone_status == drone.status_charge:
+                drone_num_charging += 1
+            if drone.drone_status == drone.status_standby:
+                list_standby_drone.append(drone)
+        drone_num_standby = len(list_standby_drone)
+        drone_num_tasking = self.drone_num - drone_num_standby - drone_num_charging
+        list_standby_drone.sort(key=lambda x: x.now_battery, reverse=False)
         standby_drone_battery_list = np.zeros(10)
         temp = 1
-        temp2 = 1
         
         for drone in list_standby_drone:
-            if drone > temp * 0.1:
+            if drone.now_battery > temp * 0.1:
                 temp +=1
-            standby_drone_battery_list[temp] += 1.0/self.drone_num
-            
-        for drone in list_standby_drone:
-            if temp2 <= max_drone_num_to_charge and drone.now_battery < drone_battery_threshold:
-                    drone.status_to_charge()
-                    temp2 += 1
-            else:
-                break
-        self.state["standby_drone_battery_info"] = standby_drone_battery_list
-        self.state["charging_drone_info"] = np.array([current_is_charging_drone/self.drone_num])
-        self.state["task_drone_info"] = np.array([current_is_tasking_drone/self.drone_num])
+            standby_drone_battery_list[temp-1] += 1.0/self.drone_num    
         
+        num_charging_drone = 0
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_charge:
+                num_charging_drone += 1
+            elif drone.drone_status == drone.status_standby and drone.now_battery < 0.25:
+                drone.status_to_charge()
+                num_charging_drone += 1
+            if  num_charging_drone >= max_drone_num_to_charge:
+                break
+        if num_charging_drone < min_drone_num_to_charge:
+            for drone in self.drone_list_this_run:
+                if drone.drone_status == drone.status_standby and drone.now_battery < 0.9:
+                    drone.status_to_charge()
+                    num_charging_drone += 1
+                if num_charging_drone >= min_drone_num_to_charge:
+                    break
+
+        self.state["standby_drone_battery_info"] = standby_drone_battery_list
+        self.state["charging_drone_info"] = np.array([drone_num_tasking/self.drone_num])
+        self.state["task_drone_info"] = np.array([drone_num_charging/self.drone_num])
+        
+        current_charging_power = 0
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_charge:
+                current_charging_power += drone.current_charge_power
+        self.power_list_this_run.append(current_charging_power)
+
         power_reward = 0
         if current_charging_power < self.avg_power_this_run-0.1:
             power_reward = self.power_reward_base_1 + self.power_reward_k_1 * (self.avg_power_this_run - current_charging_power)
@@ -366,6 +489,7 @@ class Drone_charging_env(gym.Env):
             power_reward = self.power_reward_base_2 + self.power_reward_k_2 * (current_charging_power - self.max_power_this_run)
         else:
             power_reward = self.power_reward_A
+                  
         
         return power_reward
 
@@ -403,10 +527,12 @@ class Drone_charging_env(gym.Env):
         self.avg_power_this_run = self.shuffle_avg_power_list[self.index]
         self.drone_list_this_run = []
         self.order_fifo_this_run = []
-        self.order_index = 0
+        self.handle_order_this_run = []
+        self.power_list_this_run = []
+        self.order_index_this_run = 0
         
         
-        drone_private:drone_module.Normal_Drone_Model = self.drone.deepcopy()
+        drone_private:drone_module.Normal_Drone_Model = copy.deepcopy(self.drone)
         if self.Full_battery_at_start:
             drone_private.now_battery = 1.0
             
@@ -417,9 +543,9 @@ class Drone_charging_env(gym.Env):
             "standby_drone_battery_info":[0,0,0,0,0,0,0,0,0,0.99],
             "charging_drone_info":np.zeros(1),
             "task_drone_info":np.zeros(1),
-            "current_time":self.time_info[0],
-            "current_order_num":0,
-            "existing_order_num":0
+            "current_time":[self.time_info[0]],
+            "current_order_num":[0],
+            "existing_order_num":[0]
         }
         
         return self.state 
@@ -427,11 +553,24 @@ class Drone_charging_env(gym.Env):
     def cal_SLA(self):
         SLA = 0.0
         total_time = 0
+        delay_time = 0
         for order in self.handle_order_this_run:
             total_time += order['rx_time'] - order['time']
             delay_time += order['tx_time'] - order['time']
         SLA = (total_time - delay_time) / total_time
         return SLA
+    
+    def get_power_info(self):
+        avg_power_this_run = np.average(self.power_list_this_run)
+        max_power_this_run = np.max(self.power_list_this_run)
+        delta_battery_energy = 0
+        for drone in self.drone_list_this_run:
+            delta_battery_energy += (1-drone.now_battery)
+        delta_battery_energy = delta_battery_energy * drone.max_battery_energy
+        
+        avg_power_this_run = (avg_power_this_run *(self.time_info[1]-self.time_info[0])/60 + delta_battery_energy ) / 24
+        
+        return self.power_list_this_run, avg_power_this_run, max_power_this_run
      
     def render(self):
         # No need to render 
