@@ -123,7 +123,8 @@ if __name__ == "__main__":
     
 
     lr = 2e-4
-    num_episodes = 250
+
+    num_episodes = 500
     hidden_dim = 128
     gamma = 0.98
     epsilon = 0.01
@@ -173,6 +174,8 @@ if __name__ == "__main__":
         max_power_list = []
         SLA_list = []
         for i in range(10):
+            if i > 3 and i % 2 == 0:
+                lr = lr / 2
             with tqdm(total=int(num_episodes / 10), desc='Iteration %d' % i) as pbar:
                 for i_episode in range(int(num_episodes / 10)):
                     episode_return = 0
