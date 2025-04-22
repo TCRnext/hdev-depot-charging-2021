@@ -43,7 +43,7 @@ class Qnet(torch.nn.Module):
         self.fc2 = torch.nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))  # 隐藏层使用ReLU激活函数
+        x = F.leaky_relu(self.fc1(x))  # 激活函数使用LeakyReLU
         return self.fc2(x)
     
 
@@ -66,9 +66,13 @@ class DQN:
         self.count = 0  # 计数器,记录更新次数
         self.device = device
 
-    def take_action(self, state):  # epsilon-贪婪策略采取动作
-        if np.random.random() < self.epsilon:
-            action = np.random.randint(self.action_dim)
+    def take_action(self, state,is_train = True):  # epsilon-贪婪策略采取动作
+        if  is_train: #如果不是训练阶段,则不使用epsilon-greedy策略
+            if np.random.random() < self.epsilon:
+                action = np.random.randint(self.action_dim)
+            else:
+                state = torch.tensor([state], dtype=torch.float).to(self.device)
+                action = self.q_net(state).argmax().item()
         else:
             state = torch.tensor([state], dtype=torch.float).to(self.device)
             action = self.q_net(state).argmax().item()
@@ -105,15 +109,20 @@ class DQN:
 if __name__ == "__main__":
     drone_num = 100
     drone = drone_module.Normal_Drone_Model(620,25,120,130,min_litoff_land_time=1.5,max_battery_energy=64.26)
-    scene_num = 3
-    simulation_period = (0*60,24*60,1)
+    scene_num = 10
+    simulation_period = (6*60,24*60,1)
+
+    seed = 0
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     scenelist:List[Union[scene_module.Taxi_generator,scene_module.Goods_delivery_generator]] = []   
     for i in range(scene_num):
         scene_piece = scene_module.Taxi_generator(min_per_step=simulation_period[2])
         scenelist.append(scene_piece)
     
 
-    lr = 2e-3
+    lr = 2e-4
     num_episodes = 500
     hidden_dim = 128
     gamma = 0.98
@@ -122,6 +131,7 @@ if __name__ == "__main__":
     buffer_size = 10000
     minimal_size = 500
     batch_size = 64
+
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     from gym.envs.registration import register
 
@@ -137,24 +147,31 @@ if __name__ == "__main__":
         scene_list = scenelist, 
         time_info = simulation_period,
         num_simulation = 1,
+        seed = seed
         )
-    seed = 0
+    
     random.seed(seed)
     np.random.seed(seed)
-    env.seed(seed)
+
     torch.manual_seed(seed)
     replay_buffer = ReplayBuffer(buffer_size)
     
     state_dim = env.observation_space['standby_drone_battery_info'].shape[0] + env.observation_space['charging_drone_info'].shape[0] + env.observation_space['task_drone_info'].shape[0] + env.observation_space['current_time'].shape[0] + env.observation_space['current_order_num'].shape[0] + env.observation_space['existing_order_num'].shape[0]
-    action_dim = env.action_space['max_drone_percent_to_charge'].n * env.action_space['drone_battery_threshold'].n
+    action_dim = env.action_space.n
     agent = DQN(state_dim, hidden_dim, action_dim, lr, gamma, epsilon,
                 target_update, device)
 
     return_list = []
+    return_power_list = []
+    return_order_list = []
+    max_power_list = []
+    SLA_list = []
     for i in range(10):
         with tqdm(total=int(num_episodes / 10), desc='Iteration %d' % i) as pbar:
             for i_episode in range(int(num_episodes / 10)):
                 episode_return = 0
+                power_return = 0
+                order_return = 0
                 state = env.reset()
                 #将state转换为numpy数组
                 state = np.concatenate([state['standby_drone_battery_info'],
@@ -167,10 +184,7 @@ if __name__ == "__main__":
                 while not done:
                     action = agent.take_action(state)
                             # 将动作转换为字典类型
-                    action_dict = {}
-                    action_dict['max_drone_percent_to_charge'] = action % env.action_space['max_drone_percent_to_charge'].n + 1
-                    action_dict['drone_battery_threshold'] = action // env.action_space['max_drone_percent_to_charge'].n + 2
-                    next_state, reward, done, total_done, _ = env.step(action_dict)
+                    next_state, reward, done, total_done, _ = env.step(action)
                     #将next_state转换为numpy数组
                     next_state = np.concatenate([next_state['standby_drone_battery_info'],
                                 next_state['charging_drone_info'],
@@ -178,9 +192,13 @@ if __name__ == "__main__":
                                 next_state['current_time'],
                                 next_state['current_order_num'],
                                 next_state['existing_order_num']])
-                    replay_buffer.add(state, action, reward, next_state, done)
+                    
+                    replay_buffer.add(state, action, reward[0], next_state, done)
                     state = next_state
-                    episode_return += reward
+                    episode_return += reward[0]
+                    power_return += reward[2]
+                    order_return += reward[1]
+
                     # 当buffer数据的数量超过一定值后,才进行Q网络训练
                     if replay_buffer.size() > minimal_size:
                         b_s, b_a, b_r, b_ns, b_d = replay_buffer.sample(batch_size)
@@ -193,13 +211,64 @@ if __name__ == "__main__":
                         }
                         agent.update(transition_dict)
                 
+                SLA = env.cal_SLA()
+                SLA_list.append(SLA)
+                _,_, max_power = env.get_power_info()
+                max_power_list.append(max_power)
                 return_list.append(episode_return)
+                return_power_list.append(power_return)
+                return_order_list.append(order_return)
+
                 if (i_episode + 1) % 10 == 0:
                     pbar.set_postfix({
                         'episode':
                         '%d' % (num_episodes / 10 * i + i_episode + 1),
-                        'return':
-                        '%.3f' % np.mean(return_list[-10:])
+                        'power':
+                        '%.1f' % np.mean(return_power_list[-10:]),
+                        'order':
+                        '%.1f' % np.mean(return_order_list[-10:]),
+                        'SLA':
+                        '%.3f' % np.mean(SLA_list[-10:]),
+                        'max_power':
+                        '%.1f' % np.mean(max_power_list[-10:])
                     })
                 pbar.update(1)
     pass
+    #保存模型，记录时间到文件名
+    if not os.path.exists('model'):
+        os.makedirs('model')
+    torch.save(agent.q_net.state_dict(), 'model/dqn_model_{}.pth'.format(time.strftime("%Y%m%d-%H%M%S")))
+    #推理
+    while env.index !=0:
+        state = env.reset()
+
+    #推理数据统计
+    power_list_infer = []
+    order_list_infer = []
+    SLA_list_infer = []
+    max_power_list_infer = []
+    avg_power_list_infer = []
+    done = False
+
+    for i in range(scene_num):
+        while not done:
+            action = agent.take_action(state,is_train=False)
+            next_state, reward, done, total_done, _ = env.step(action)
+            #将next_state转换为numpy数组
+            next_state = np.concatenate([next_state['standby_drone_battery_info'],
+                                next_state['charging_drone_info'],
+                                next_state['task_drone_info'],
+                                next_state['current_time'],
+                                next_state['current_order_num'],
+                                next_state['existing_order_num']])
+            state = next_state
+        SLA = env.cal_SLA()
+        SLA_list_infer.append(SLA)
+        power_list_this_run ,avg_power_this_run,max_power_this_run  = env.get_power_info()
+        power_list_infer.append(power_list_this_run)
+        avg_power_list_infer.append(avg_power_this_run)
+        max_power_list_infer.append(max_power_this_run)
+        order_list_this_run = env.
+
+
+        

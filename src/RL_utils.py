@@ -41,14 +41,14 @@ class Drone_charging_env(gym.Env):
         self.enable_charging_outside = enable_charging_outside
         
         
-        self.delay_reward_base = 0.2
-        self.delay_reward_k = -2.0
+        self.delay_reward_base = 0.001
+        self.delay_reward_k = -0.01
         
         self.power_reward_A = 1.0
         self.power_reward_base_1 = 0.2
         self.power_reward_base_2 = 0.5
-        self.power_reward_k_1 = -0.25
-        self.power_reward_k_2 = -0.75
+        self.power_reward_k_1 = -0.1
+        self.power_reward_k_2 = -4.0
         
         
         
@@ -58,7 +58,7 @@ class Drone_charging_env(gym.Env):
            
         """
         
-        self.action_space = spaces.Discrete(100,start=1)
+        self.action_space = spaces.Discrete(30,start=1)
         
 
         """
@@ -103,7 +103,7 @@ class Drone_charging_env(gym.Env):
             self.test_max_power_list = [copy.deepcopy(self.max_power_list[i]) for i in test_indices]
             self.test_avg_power_list = [copy.deepcopy(self.avg_power_list[i]) for i in test_indices]
 
-            
+        self.per_drone_max_power = drone.max_battery_energy / drone.max_charge_time * 60.0
         self.max_index = 0
         self.order_index_this_run = 0
         self.index = None
@@ -115,6 +115,7 @@ class Drone_charging_env(gym.Env):
         self.order_fifo_this_run = []
         self.handle_order_this_run = []
         self.SLA_this_run = []
+        self.max_power_this_run_runtime = 0
         self.mode = 'default'
         self.reset()
         
@@ -327,7 +328,7 @@ class Drone_charging_env(gym.Env):
         for drone in self.drone_list_this_run:
             drone.update_status(self.time_info[2])
         num_charging_drone = 0
-        max_drone_num_to_charge = action * 0.01 * self.drone_num
+        max_drone_num_to_charge = (action+20) * 0.01 * self.drone_num
         minimum_num_charging_drone = max_drone_num_to_charge * 0.80
 
 
@@ -377,18 +378,14 @@ class Drone_charging_env(gym.Env):
         
         self.power_list_this_run.append(current_charging_power)
         power_reward = 0
-        if current_charging_power < self.avg_power_this_run-0.1:
-            power_reward = self.power_reward_base_1 + self.power_reward_k_1 * (self.avg_power_this_run - current_charging_power)
-        elif current_charging_power > self.max_power_this_run+0.1:
-            power_reward = self.power_reward_base_2 + self.power_reward_k_2 * (current_charging_power - self.max_power_this_run)
-        else:
-            power_reward = self.power_reward_A                
-
+        if current_charging_power > (self.avg_power_this_run +self.max_power_this_run)/2 and current_charging_power > self.max_power_this_run_runtime:
+            power_reward =  self.power_reward_k_2 * (current_charging_power - self.max_power_this_run_runtime)/self.per_drone_max_power
+        self.max_power_this_run_runtime = max(current_charging_power,self.max_power_this_run_runtime)
         self.state["standby_drone_battery_info"] = standby_drone_battery_list
         self.state["charging_drone_info"] = np.array([num_tasking_drone/self.drone_num])
         self.state["task_drone_info"] = np.array([num_charging_drone/self.drone_num])        
         
-        reward = reward_order + power_reward
+        reward = (reward_order + power_reward,reward_order , power_reward)
         current_time += self.time_info[2]
         self.state["current_time"][0] = current_time
         if current_time >= self.time_info[1]:
@@ -477,16 +474,19 @@ class Drone_charging_env(gym.Env):
         self.state["task_drone_info"] = np.array([drone_num_charging/self.drone_num])
         
         current_charging_power = 0
+    
         for drone in self.drone_list_this_run:
             if drone.drone_status == drone.status_charge:
                 current_charging_power += drone.current_charge_power
+                current_charging_drone += 1
+        avg_charging_power = current_charging_power / current_charging_drone if current_charging_drone > 0 else 1
         self.power_list_this_run.append(current_charging_power)
-
+    
         power_reward = 0
         if current_charging_power < self.avg_power_this_run-0.1:
-            power_reward = self.power_reward_base_1 + self.power_reward_k_1 * (self.avg_power_this_run - current_charging_power)
+            power_reward = self.power_reward_base_1 + self.power_reward_k_1 * (self.avg_power_this_run - current_charging_power)/avg_charging_power
         elif current_charging_power > self.max_power_this_run+0.1:
-            power_reward = self.power_reward_base_2 + self.power_reward_k_2 * (current_charging_power - self.max_power_this_run)
+            power_reward = self.power_reward_base_2 + self.power_reward_k_2 * (current_charging_power - self.max_power_this_run)/avg_charging_power
         else:
             power_reward = self.power_reward_A
                   
@@ -530,7 +530,7 @@ class Drone_charging_env(gym.Env):
         self.handle_order_this_run = []
         self.power_list_this_run = []
         self.order_index_this_run = 0
-        
+        self.max_power_this_run_runtime = 0
         
         drone_private:drone_module.Normal_Drone_Model = copy.deepcopy(self.drone)
         if self.Full_battery_at_start:

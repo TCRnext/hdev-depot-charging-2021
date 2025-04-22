@@ -242,6 +242,7 @@ if __name__ == '__main__':
         )
     peak_chargingpower_list = []
     avg_chargingpower_list = []
+    peak_avg_ratio_list = []
     
     for i in range(len(order_list)):
         order_list_piece = order_list[i]
@@ -266,13 +267,15 @@ if __name__ == '__main__':
         avg_chargingpower = (avg_chargingpower *(simulation_period[1] - simulation_period[0]) / 60.0 + delta_battery_energy)/24.0
         peak_chargingpower_list.append(peak_chargingpower)
         avg_chargingpower_list.append(avg_chargingpower)
+        peak_avg_ratio_list.append(peak_chargingpower/avg_chargingpower)
         print("平均充电功率",avg_chargingpower)
         print("峰值充电功率",peak_chargingpower)
+        print("充电功率占比",peak_chargingpower/avg_chargingpower)
             
     # 从peak_chargingpower_list中获取最大值,中位值，最小值的index
-    max_index = peak_chargingpower_list.index(max(peak_chargingpower_list))
-    min_index = peak_chargingpower_list.index(min(peak_chargingpower_list))
-    mid_index = peak_chargingpower_list.index(sorted(peak_chargingpower_list)[len(peak_chargingpower_list)//2])
+    max_index = peak_avg_ratio_list.index(max(peak_avg_ratio_list))
+    min_index = peak_avg_ratio_list.index(min(peak_avg_ratio_list))
+    mid_index = peak_avg_ratio_list.index(sorted(peak_avg_ratio_list)[len(peak_avg_ratio_list)//2])
     
     # 逐一计算每10分钟的平均订单量
     num_period = (simulation_period[1] - simulation_period[0]) // 10 +1
