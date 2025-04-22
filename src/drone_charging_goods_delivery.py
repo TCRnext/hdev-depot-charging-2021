@@ -274,6 +274,18 @@ if __name__ == '__main__':
     min_index = peak_chargingpower_list.index(min(peak_chargingpower_list))
     mid_index = peak_chargingpower_list.index(sorted(peak_chargingpower_list)[len(peak_chargingpower_list)//2])
     
+    # 逐一计算每10分钟的平均订单量
+    num_period = (simulation_period[1] - simulation_period[0]) // 10 +1
+    order_num_list = np.zeros(num_period)
+    for i in range(len(order_list)):
+        order_list_piece = order_list[i]
+        for order in order_list_piece:
+            period_index = (order['tx_time'] - simulation_period[0]) // 10
+            if period_index < num_period:
+                order_num_list[period_index] += 1    
+    time_list_10min = []
+    for i in range(num_period):
+        time_list_10min.append((simulation_period[0] + i*10)/60.0)
     # 画出充电功率的折线图
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -290,6 +302,7 @@ if __name__ == '__main__':
             ax.plot(time_list ,p_list ,color = '#00BFFF', linewidth = 1)
         else:
             ax.plot(time_list ,p_list ,color = '#87CEFA', linewidth = 0.3,alpha=0.4)
+        ax.plot(time_list_10min ,order_num_list ,color = '#FF0000', linewidth = 1, label='order num')
     # 设置x轴和y轴的标签
     ax.set_xlabel('time(h)')
     ax.set_ylabel('charging power(KW)')
