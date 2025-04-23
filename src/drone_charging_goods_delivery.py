@@ -224,7 +224,7 @@ def Taxi_simulate_core(
 
 
 if __name__ == '__main__':
-    charge_strat = 'Limited_power'
+    charge_strat = 'Least_standby'
     least_standby_drone_percent = 0.45
     per_RX_base_generate = 1.2 #每分钟生成的RX基站基准权重
     #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 

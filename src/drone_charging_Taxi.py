@@ -24,6 +24,7 @@ def scene_Taxi_analysis(
     power_limit = 950,              #KW
     standby_drone_battery = 0.9,          #KW
     least_standby_drone_percent = 0.40,    #KW
+    per_step_base_generate = 1
     
 ):
     assert charge_strat in ['immediate', 
@@ -35,7 +36,7 @@ def scene_Taxi_analysis(
     if non_default_scene_module is not None:
         scene= non_default_scene_module(min_per_step=simulation_period[2])
     else:
-        scene = scene_module.Taxi_generator(min_per_step=simulation_period[2],per_step_base_generate = 1.0)
+        scene = scene_module.Taxi_generator(min_per_step=simulation_period[2],per_step_base_generate = per_step_base_generate)
     if non_default_drone_module is not None:
         drone = non_default_drone_module
     else:
@@ -224,20 +225,25 @@ def Taxi_simulate_core(
 
 
 if __name__ == '__main__':
-    charge_strat = 'delayed'
+    charge_strat = 'Least_standby'
     least_standby_drone_percent = 0.45
     minimum_num_charging_drone = 30
+    power_limit = 950
     #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 
     random.seed(0)
     np.random.seed(0)
     simulation_period = (6*60,24*60,1)
     order_list ,chargingpower_list ,delta_battery_energy_list  = scene_Taxi_analysis(
-        simulation_period = simulation_period ,
-        charge_strat= charge_strat,
-        num_drone= 100,
-        num_simulation = 10,
-        least_standby_drone_percent = least_standby_drone_percent,
-        minimum_num_charging_drone = 30
+        num_drone = 100,
+        simulation_period = (6*60,24*60,1),
+        num_simulation = 20,
+        is_same_scene = True,
+        charge_strat = charge_strat, #充电策略 
+        minimum_num_charging_drone = minimum_num_charging_drone,
+        power_limit = power_limit,              #KW
+        standby_drone_battery = 0.9,          #KW
+        least_standby_drone_percent = least_standby_drone_percent,    #KW
+        per_step_base_generate = 1
         )
     peak_chargingpower_list = []
     avg_chargingpower_list = []

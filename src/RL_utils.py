@@ -14,6 +14,15 @@ import copy
 import time
 from gym import spaces
 
+
+def moving_average(a, window_size):
+    cumulative_sum = np.cumsum(np.insert(a, 0, 0)) 
+    middle = (cumulative_sum[window_size:] - cumulative_sum[:-window_size]) / window_size
+    r = np.arange(1, window_size-1, 2)
+    begin = np.cumsum(a[:window_size-1])[::2] / r
+    end = (np.cumsum(a[:-window_size:-1])[::2] / r)[::-1]
+    return np.concatenate((begin, middle, end))
+
 class Drone_charging_env(gym.Env):
     def __init__(
         self,
@@ -378,7 +387,7 @@ class Drone_charging_env(gym.Env):
         
         self.power_list_this_run.append(current_charging_power)
         power_reward = 0
-        if current_charging_power > (self.avg_power_this_run +self.max_power_this_run)/2 and current_charging_power > self.max_power_this_run_runtime:
+        if current_charging_power > self.avg_power_this_run*1.5  and current_charging_power > self.max_power_this_run_runtime:
             power_reward =  self.power_reward_k_2 * (current_charging_power - self.max_power_this_run_runtime)/self.per_drone_max_power
         self.max_power_this_run_runtime = max(current_charging_power,self.max_power_this_run_runtime)
         self.state["standby_drone_battery_info"] = standby_drone_battery_list
