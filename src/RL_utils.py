@@ -202,9 +202,17 @@ class Drone_charging_env(gym.Env):
             for order in piece:
                 order_fifo.append(order)
             order_is_finished = []
+            drone_non_tasking_list = []
+            for drone in drone_list:
+                if drone.drone_status == drone.status_standby:
+                    drone_non_tasking_list.append(drone)
+                if drone.drone_status == drone.status_charge:
+                    drone_non_tasking_list.append(drone)
+            #根据电量排序无人机
+            drone_non_tasking_list.sort(key=lambda x: x.now_battery+x.drone_status, reverse=False)
             
             for order in order_fifo:
-                for drone in drone_list:
+                for drone in drone_non_tasking_list:
                     if drone.drone_status == drone.status_charge and self.enable_partly_charging == False:
                         continue
                     if drone.status_to_flight(order['distance'],is_single_path = self.enable_charging_outside,is_P2P_path = self.enable_charging_outside) :
@@ -212,6 +220,7 @@ class Drone_charging_env(gym.Env):
                         order['tx_time'] = time
                         order['rx_time'] = time + drone.flight_time_left
                         order_list.append(copy.deepcopy(order))
+                        drone_non_tasking_list.remove(drone)
                         break
             
             for order in order_is_finished:
@@ -310,13 +319,20 @@ class Drone_charging_env(gym.Env):
         self.state["current_order_num"][0] = current_order_num
         self.state["existing_order_num"][0] = len(self.order_fifo_this_run)
 
+        drone_non_tasking_list = []
+        for drone in self.drone_list_this_run:
+            if drone.drone_status == drone.status_standby:
+                drone_non_tasking_list.append(drone)
+            if drone.drone_status == drone.status_charge:
+                drone_non_tasking_list.append(drone)
+        #根据电量排序无人机
+        drone_non_tasking_list.sort(key=lambda x: x.now_battery+x.drone_status, reverse=False)
+
         order_is_finished = []
         reward_order = 0
         for order in self.order_fifo_this_run:
-            for drone in self.drone_list_this_run:
+            for drone in drone_non_tasking_list:
                 if drone.drone_status == drone.status_charge and self.enable_partly_charging == False:
-                    continue
-                if drone.drone_status == drone.status_flight:
                     continue
                 if drone.status_to_flight(order['distance'],is_single_path = self.enable_charging_outside,is_P2P_path = self.enable_charging_outside) == True:
                     order_is_finished.append(order)
@@ -324,6 +340,7 @@ class Drone_charging_env(gym.Env):
                     order['tx_time'] = current_time
                     order['rx_time'] = current_time + drone.flight_time_left
                     self.handle_order_this_run.append(copy.deepcopy(order))
+                    drone_non_tasking_list.remove(drone)
                     break
         
         

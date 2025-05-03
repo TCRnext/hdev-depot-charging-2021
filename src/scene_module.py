@@ -22,13 +22,16 @@ class General_delivery_generator:
                 is_center_cluster_tx = True ,                       ## 是否将一个集群发送点设置为中心点
                 per_min_base_generate = 5   ,
                 min_per_step = 1 ,                                  ## 每分钟生成的配送数量
+                is_real_geometry = False ,                             ## 是否使用真实地理消息
+                real_geometry_rx_list = None ,                      ## 真实地理消息接收点列表
+                real_geometry_tx_list = None ,                      ## 真实地理消息发送点列表
                 ):
         
         
-        #assert (len(rx_cluster_weight) == num_clusters_rx) or (len(rx_cluster_weight) == 1) , "rx_cluster_weight长度应该等于num_clusters_rx或者等于1"
-        #assert len(tx_cluster_weight) == num_clusters_tx or (len(tx_cluster_weight) == 1) , "tx_cluster_weight长度应该等于num_clusters_tx或者等于1"
-        #assert len(busy_time_weight) == len(busy_time) , "busy_time_weight长度应该等于busy_time"
-        #assert len(busy_time_cluster_extra_weight) == len(busy_time) , "busy_time_cluster_extra_weight长度应该等于busy_time"
+        assert (len(rx_cluster_weight) == num_clusters_rx)  , "rx_cluster_weight长度应该等于num_clusters_rx或者等于1"
+        assert len(tx_cluster_weight) == num_clusters_tx , "tx_cluster_weight长度应该等于num_clusters_tx或者等于1"
+        assert len(busy_time_weight) == len(busy_time) , "busy_time_weight长度应该等于busy_time"
+        assert len(busy_time_cluster_extra_weight) == len(busy_time) , "busy_time_cluster_extra_weight长度应该等于busy_time"
                 
         self.is_cluster_enable = is_cluster_enable
         self.range_radius = range_radius
@@ -43,29 +46,34 @@ class General_delivery_generator:
         ## 生成配送场景 在以半径为range_radius的圆内生成num_clusters_tx个集群发送点和num_clusters_rx个集群接收点
         
         if is_cluster_enable:
-            if is_center_cluster_tx:
-                self.cluster_tx = [[0,0]]
-                for i in range(num_clusters_tx-1):
-                    tx =[range_radius,range_radius]
-                    while tx[0]*tx[0] + tx[1]*tx[1]  > range_radius*range_radius:
-                        tx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
-                    self.cluster_tx.append(tx)
+            if is_real_geometry:
+                assert len(real_geometry_rx_list) == num_clusters_rx , "real_geometry_rx_list长度应该等于num_clusters_rx"
+                assert len(real_geometry_tx_list) == num_clusters_tx , "real_geometry_tx_list长度应该等于num_clusters_tx"
+                self.cluster_tx = copy.deepcopy(real_geometry_tx_list)
+                self.cluster_rx = copy.deepcopy(real_geometry_rx_list)
             else:
-                self.cluster_tx = []
-                for i in range(num_clusters_tx):
-                    tx =[range_radius,range_radius]
-                    while tx[0]*tx[0] + tx[1]*tx[1] > range_radius*range_radius:
-                        tx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
-                    self.cluster_tx.append(tx)
-                
-       
-            self.cluster_rx = []
-            for i in range(num_clusters_rx):
-                rx =[range_radius,range_radius]
-                while rx[0]*rx[0] + rx[1]*rx[1] > range_radius*range_radius:
-                    rx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
-                self.cluster_rx.append(rx)
-    
+                if is_center_cluster_tx:
+                    self.cluster_tx = [[0,0]]
+                    for i in range(num_clusters_tx-1):
+                        tx =[range_radius,range_radius]
+                        while tx[0]*tx[0] + tx[1]*tx[1]  > range_radius*range_radius:
+                            tx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
+                        self.cluster_tx.append(tx)
+                else:
+                    self.cluster_tx = []
+                    for i in range(num_clusters_tx):
+                        tx =[range_radius,range_radius]
+                        while tx[0]*tx[0] + tx[1]*tx[1] > range_radius*range_radius:
+                            tx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
+                        self.cluster_tx.append(tx)
+                        
+                self.cluster_rx = []
+                for i in range(num_clusters_rx):
+                    rx =[range_radius,range_radius]
+                    while rx[0]*rx[0] + rx[1]*rx[1] > range_radius*range_radius:
+                        rx = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
+                    self.cluster_rx.append(rx)
+        
         self.busy_time = []
         for i in range(len(busy_time)):
             self.busy_time.append(busy_time[i] * 60)
@@ -177,8 +185,9 @@ class General_delivery_generator:
             if select < sum(self.tx_cluster_weight[:i+1])/sum(self.tx_cluster_weight):
                 tx = [random.uniform(-self.range_radius,self.range_radius),random.uniform(-self.range_radius,self.range_radius)]
                 while tx[0]*tx[0] + tx[1]*tx[1] > self.cluster_radius*self.cluster_radius:
-                    tx = [random.uniform(-self.range_radius,self.range_radius),random.uniform(-self.range_radius,self.range_radius)]
-                tx += self.cluster_tx[i]
+                    tx = [random.uniform(-self.cluster_radius,self.cluster_radius),random.uniform(-self.cluster_radius,self.cluster_radius)]
+                tx[0] += self.cluster_tx[i][0]
+                tx[1] += self.cluster_tx[i][1]
                 return tx
         
     def generate_cluster_rx(self):
@@ -189,6 +198,8 @@ class General_delivery_generator:
                 while rx[0]*rx[0] + rx[1]*rx[1] > self.cluster_radius*self.cluster_radius:
                     rx = [random.uniform(-self.range_radius,self.range_radius),random.uniform(-self.range_radius,self.range_radius)]
                 rx += self.cluster_rx[i]
+                rx[0] += self.cluster_rx[i][0]
+                rx[1] += self.cluster_rx[i][1]
                 return rx
         
     def genrate_non_cluster(self):
@@ -307,20 +318,34 @@ class Taxi_generator(General_delivery_generator):
                 minimum_distance = 3 ,                              ## 出租车配送的最小距离
                 distance_extra_weight = 0.1 ,                        ## 出租车配送距离额外权重
                 min_per_step = 1 ,                                   ## 每分钟生成的配送数量
+                is_real_geometry = False ,                        ## 是否使用真实地理消息
+                real_geometry_rx_list = None ,                ## 真实地理消息接收点列表
+                real_geometry_tx_list = None ,                ## 真实地理消息发送点列表
+                real_geometry_mix_list = None                   ## 真实地理消息发送点权重
                 ):
-        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,copy.deepcopy(tx_cluster_weight),copy.deepcopy(rx_cluster_weight),non_cluster_weight,is_busy_time,copy.deepcopy(busy_time),busy_time_length,copy.deepcopy(busy_time_weight),copy.deepcopy(busy_time_cluster_extra_weight),is_center_cluster_tx,per_step_base_generate,min_per_step)
+        super().__init__(range_radius,is_cluster_enable,cluster_radius,num_clusters_tx,num_clusters_rx,copy.deepcopy(tx_cluster_weight),copy.deepcopy(rx_cluster_weight),non_cluster_weight,is_busy_time,copy.deepcopy(busy_time),busy_time_length,copy.deepcopy(busy_time_weight),copy.deepcopy(busy_time_cluster_extra_weight),is_center_cluster_tx,per_step_base_generate,min_per_step,is_real_geometry,real_geometry_rx_list,real_geometry_tx_list)
         self.is_cluster_mixed = is_cluster_mixed
         if is_cluster_mixed:
-            self.num_clusters_rx = num_clusters_rx + num_clusters_mixed
-            self.num_clusters_tx = num_clusters_tx + num_clusters_mixed
-            self.tx_cluster_weight += mixed_cluster_weight
-            self.rx_cluster_weight += mixed_cluster_weight
-            for i in range(num_clusters_mixed):
-                mix =[range_radius,range_radius]
-                while mix[0]*mix[0] + mix[1]*mix[1] > range_radius*range_radius:
-                    mix = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
-                self.cluster_tx.append(mix)
-                self.cluster_rx.append(mix)
+            if is_real_geometry:
+                assert len(real_geometry_mix_list) == num_clusters_mixed , "is_real_geometry_mix_list长度应该等于num_clusters_mixed"
+                self.num_clusters_rx = num_clusters_rx + num_clusters_mixed
+                self.num_clusters_tx = num_clusters_tx + num_clusters_mixed
+                self.tx_cluster_weight += mixed_cluster_weight
+                self.rx_cluster_weight += mixed_cluster_weight
+                for i in range(num_clusters_mixed):
+                    self.cluster_tx.append(copy.deepcopy(real_geometry_mix_list[i]))
+                    self.cluster_rx.append(copy.deepcopy(real_geometry_mix_list[i]))
+            else:
+                self.num_clusters_rx = num_clusters_rx + num_clusters_mixed
+                self.num_clusters_tx = num_clusters_tx + num_clusters_mixed
+                self.tx_cluster_weight += mixed_cluster_weight
+                self.rx_cluster_weight += mixed_cluster_weight
+                for i in range(num_clusters_mixed):
+                    mix =[range_radius,range_radius]
+                    while mix[0]*mix[0] + mix[1]*mix[1] > range_radius*range_radius:
+                        mix = [random.uniform(-range_radius,range_radius),random.uniform(-range_radius,range_radius)]
+                    self.cluster_tx.append(mix)
+                    self.cluster_rx.append(mix)
         self.minimum_distance = minimum_distance
         self.distance_extra_weight = distance_extra_weight
         

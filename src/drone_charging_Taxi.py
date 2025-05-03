@@ -129,10 +129,16 @@ def Taxi_simulate_core(
         drone:drone_module.Normal_Drone_Model
         for drone in drone_list:
             drone.update_status(simulation_period[2])
+        drone_non_tasking_list = []
+        for drone in drone_list:
+            if drone.drone_status == drone.status_standby or drone.drone_status == drone.status_charge:
+                drone_non_tasking_list.append(drone)
+        drone_non_tasking_list.sort(key=lambda x: x.now_battery+x.drone_status, reverse=False)
+        
         order_is_finished = []
         
         for order in order_fifo:
-            for drone in drone_list:
+            for drone in drone_non_tasking_list:
                 if drone.drone_status == drone.status_charge and enable_partly_charging == False:
                     continue
                 if drone.status_to_flight(order['distance']):
@@ -140,6 +146,7 @@ def Taxi_simulate_core(
                     order['tx_time'] = time
                     order['rx_time'] = time + drone.flight_time_left
                     order_list.append(copy.deepcopy(order))
+                    drone_non_tasking_list.remove(drone)
                     break
         #删除已经完成的订单
         for order in order_is_finished:
@@ -226,7 +233,7 @@ def Taxi_simulate_core(
 
 if __name__ == '__main__':
     charge_strat = 'Least_standby'
-    least_standby_drone_percent = 0.45
+    least_standby_drone_percent = 0.50
     minimum_num_charging_drone = 30
     power_limit = 950
     #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 
@@ -290,7 +297,7 @@ if __name__ == '__main__':
         for order in order_list_piece:
             period_index = (order['tx_time'] - simulation_period[0]) // 10
             if period_index < num_period:
-                order_num_list[period_index] += 1    
+                order_num_list[period_index] += 1 / len (order_list)   
     time_list_10min = []
     for i in range(num_period):
         time_list_10min.append((simulation_period[0] + i*10)/60.0)

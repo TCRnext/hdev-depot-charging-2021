@@ -24,7 +24,7 @@ def scene_Taxi_analysis(
     power_limit = 950,              #KW
     standby_drone_battery = 0.9,          #KW
     least_standby_drone_percent = 0.40,    #KW
-    per_RX_base_generate = 0.5, #每分钟生成的RX基站数量
+    per_RX_base_generate = 1, #每分钟生成的RX基站数量
 ):
     assert charge_strat in ['immediate', 
                         'Limited_power', 
@@ -39,7 +39,7 @@ def scene_Taxi_analysis(
     if non_default_drone_module is not None:
         drone = non_default_drone_module
     else:
-        drone = drone_module.Normal_Drone_Model(620,25,120,130,min_litoff_land_time=1.5,max_battery_energy=64.26)
+        drone = drone_module.Normal_Drone_Model(620,25,120,130,min_litoff_land_time=0.5,max_battery_energy=64.26)
     order_list = []
     chargingpower_list = []
     delta_battery_energy_list = []
@@ -130,8 +130,14 @@ def Taxi_simulate_core(
             drone.update_status(simulation_period[2])
         order_is_finished = []
         
+        drone_non_tasking_list = []
+        for drone in drone_list:
+            if drone.drone_status == drone.status_standby or drone.drone_status == drone.status_charge:
+                drone_non_tasking_list.append(drone)
+        drone_non_tasking_list.sort(key=lambda x: x.now_battery+x.drone_status, reverse=False)
+        
         for order in order_fifo:
-            for drone in drone_list:
+            for drone in drone_non_tasking_list:
                 if drone.drone_status == drone.status_charge and enable_partly_charging == False:
                     continue
                 if drone.status_to_flight(order['distance']):
@@ -139,6 +145,7 @@ def Taxi_simulate_core(
                     order['tx_time'] = time
                     order['rx_time'] = time + drone.flight_time_left
                     order_list.append(copy.deepcopy(order))
+                    drone_non_tasking_list.remove(drone)
                     break
         #删除已经完成的订单
         for order in order_is_finished:
@@ -224,9 +231,9 @@ def Taxi_simulate_core(
 
 
 if __name__ == '__main__':
-    charge_strat = 'Least_standby'
+    charge_strat = 'immediate'
     least_standby_drone_percent = 0.45
-    per_RX_base_generate = 1.2 #每分钟生成的RX基站基准权重
+    per_RX_base_generate = 4 #每分钟生成的RX基站基准权重
     #charge_strat = 'immediate' or 'Limited_power' or 'Least_standby' or 'delayed' 
     random.seed(0)
     np.random.seed(0)

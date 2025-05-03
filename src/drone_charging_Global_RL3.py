@@ -117,7 +117,7 @@ class DQN:
 
 if __name__ == "__main__":
     drone_num = 100
-    drone = drone_module.Normal_Drone_Model(620,25,120,130,min_litoff_land_time=1.5,max_battery_energy=64.26)
+    drone = drone_module.Normal_Drone_Model(620,25,120,130,min_litoff_land_time=0.5,max_battery_energy=64.26)
     scene_num = 10
     simulation_period = (6*60,24*60,1)
 
